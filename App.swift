@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let statusLabel = NSTextField(labelWithString: "准备就绪")
     private let log = NSTextView()
     private let spinner = NSProgressIndicator()
+    private let imageMode = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let modeHint = NSTextField(labelWithString: "保留原始分辨率，减小文件体积")
     private var files: [URL] = []
     private var output: URL?
     private var busy = false
@@ -20,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let submenu = NSMenu(); appItem.submenu = submenu
         submenu.addItem(withTitle: "退出 PPTX Precise", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = menu
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 510),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 570),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "PPTX Precise"
         window.delegate = self
@@ -28,19 +30,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let view = window.contentView!
         let title = NSTextField(labelWithString: "PPTX Precise")
         title.font = .systemFont(ofSize: 27, weight: .semibold)
-        title.frame = NSRect(x: 28, y: 449, width: 420, height: 38); view.addSubview(title)
-        let subtitle = NSTextField(labelWithString: "PowerPoint 原生排版 · 原图恢复与校验 · 全部在本机完成")
+        title.frame = NSRect(x: 28, y: 509, width: 420, height: 38); view.addSubview(title)
+        let subtitle = NSTextField(labelWithString: "PowerPoint 原生排版 · 清晰小体积 / 无损原图 · 全部在本机完成")
         subtitle.textColor = .secondaryLabelColor
-        subtitle.frame = NSRect(x: 28, y: 422, width: 650, height: 22); view.addSubview(subtitle)
+        subtitle.frame = NSRect(x: 28, y: 482, width: 650, height: 22); view.addSubview(subtitle)
         let select = NSButton(title: "选择 PPTX…", target: self, action: #selector(selectFiles))
-        select.frame = NSRect(x: 24, y: 370, width: 132, height: 32); view.addSubview(select)
+        select.frame = NSRect(x: 24, y: 430, width: 132, height: 32); view.addSubview(select)
         let clear = NSButton(title: "清空", target: self, action: #selector(clearFiles))
-        clear.frame = NSRect(x: 158, y: 370, width: 72, height: 32); view.addSubview(clear)
-        filesLabel.frame = NSRect(x: 28, y: 316, width: 660, height: 50); view.addSubview(filesLabel)
+        clear.frame = NSRect(x: 158, y: 430, width: 72, height: 32); view.addSubview(clear)
+        filesLabel.frame = NSRect(x: 28, y: 376, width: 660, height: 50); view.addSubview(filesLabel)
         let folder = NSButton(title: "保存位置…", target: self, action: #selector(selectOutput))
-        folder.frame = NSRect(x: 24, y: 274, width: 132, height: 32); view.addSubview(folder)
+        folder.frame = NSRect(x: 24, y: 334, width: 132, height: 32); view.addSubview(folder)
         folderLabel.font = .systemFont(ofSize: 12)
-        folderLabel.frame = NSRect(x: 166, y: 272, width: 520, height: 34); view.addSubview(folderLabel)
+        folderLabel.frame = NSRect(x: 166, y: 332, width: 520, height: 34); view.addSubview(folderLabel)
+        let modeLabel = NSTextField(labelWithString: "图片模式")
+        modeLabel.frame = NSRect(x: 28, y: 287, width: 70, height: 22); view.addSubview(modeLabel)
+        imageMode.addItems(withTitles: ["清晰小体积（推荐）", "无损原图"])
+        imageMode.frame = NSRect(x: 100, y: 282, width: 242, height: 30)
+        imageMode.target = self; imageMode.action = #selector(changeImageMode)
+        imageMode.selectItem(at: UserDefaults.standard.integer(forKey: "imageMode") == 1 ? 1 : 0)
+        view.addSubview(imageMode)
+        modeHint.font = .systemFont(ofSize: 12); modeHint.textColor = .secondaryLabelColor
+        modeHint.frame = NSRect(x: 354, y: 287, width: 334, height: 22); view.addSubview(modeHint)
+        changeImageMode()
         let start = NSButton(title: "转换为 PDF", target: self, action: #selector(convert))
         start.bezelStyle = .rounded
         start.keyEquivalent = "\r"
@@ -72,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else { filesLabel.stringValue = "已选 \(files.count) 项：" + files.map { $0.lastPathComponent }.joined(separator: "、") }
         folderLabel.stringValue = output?.path ?? "尚未选择保存位置"
         controls.forEach { $0.isEnabled = !busy }
+        imageMode.isEnabled = !busy
         controls.last?.isEnabled = !busy && !files.isEmpty && output != nil
     }
 
@@ -96,6 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func clearFiles() { files = []; refresh() }
 
+    @objc private func changeImageMode() {
+        let lossless = imageMode.indexOfSelectedItem == 1
+        UserDefaults.standard.set(lossless ? 1 : 0, forKey: "imageMode")
+        modeHint.stringValue = lossless ? "逐像素保留原图，文件较大" : "保留分辨率，高质量有损压缩"
+    }
+
     @objc private func selectOutput() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false; panel.canChooseDirectories = true
@@ -115,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         log.string = "首次运行如出现 PowerPoint 文件访问提示，请选择工具的 Work 文件夹并允许访问。\n"
         let process = Process()
         process.executableURL = resource.appendingPathComponent("bin/precise-pptx/precise-pptx")
-        process.arguments = files.map { $0.path } + ["--output", output.path, "--copy-pptx", "--overwrite"]
+        process.arguments = files.map { $0.path } + ["--output", output.path, "--copy-pptx", "--overwrite", "--image-mode", imageMode.indexOfSelectedItem == 1 ? "lossless" : "compact"]
         let pipe = Pipe(); process.standardOutput = pipe; process.standardError = pipe
         do { try process.run() }
         catch {

@@ -53,7 +53,7 @@ def main():
     for key in list(p):
         if key.startswith('NS') and key.endswith('UsageDescription'):
             del p[key]
-    p.update(CFBundleIdentifier='local.pptxprecise.mac',CFBundleShortVersionString='1.1.0',CFBundleVersion='110',
+    p.update(CFBundleIdentifier='local.pptxprecise.mac',CFBundleShortVersionString='1.2.0',CFBundleVersion='120',
         NSAppleEventsUsageDescription='本地调用 Microsoft PowerPoint 导出 PDF，不上传文件。')
     p['CFBundleDocumentTypes']=[{'CFBundleTypeName':'PowerPoint presentation or folder','CFBundleTypeRole':'Viewer',
         'LSItemContentTypes':['org.openxmlformats.presentationml.presentation','public.folder']}]

@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="PPTX Precise icon" width="128">
 
-**PowerPoint-native PDF export with verified source-image restoration.**
+**PowerPoint-native PDF export with compact or lossless source images.**
 
 一个在本机运行的 macOS PPTX → PDF 工具。使用 Microsoft PowerPoint 的原生排版引擎导出，再通过 pypdf 和 Pillow 恢复能够准确匹配的原始图片，并校验输出。支持双击、拖放、批量转换和命令行。
 
@@ -12,8 +12,8 @@
 
 ## 下载与使用
 
-1. 在 Releases 下载 `PPTX-Precise-v1.1.0-macOS-arm64.zip` 并解压。
-2. 打开 `PPTX Precise.app`，点击“选择 PPTX”，选择一份或多份已保存的文件，再选择保存位置并点击“转换为 PDF”。也可把 PPTX 或文件夹拖到应用图标上。
+1. 在 Releases 下载 `PPTX-Precise-v1.2.0-macOS-arm64.zip` 并解压。
+2. 打开 `PPTX Precise.app`，点击“选择 PPTX”，选择一份或多份已保存的文件，选择保存位置和图片模式，再点击“转换为 PDF”。也可把 PPTX 或文件夹拖到应用图标上。
 3. 输出同名 PDF 和一份字节相同、保持可编辑的 PPTX。输出到源目录时不会重写源 PPTX。
 
 桌面版内置 Python、pypdf 和 Pillow，不需要安装 Python、Homebrew 或 Codex。当前预编译包面向 Apple Silicon（macOS 11+，且需使用兼容当前系统的 PowerPoint）；Intel Mac 可运行源码，或在 Intel Mac 上自行构建。
@@ -29,17 +29,21 @@
 
 ## 保真方式
 
+默认选择 **清晰小体积**：图片保持原始像素尺寸，采用 JPEG 质量 95、4:4:4 色彩采样，不降低分辨率。它属于高质量有损压缩，不能称为逐像素无损。小图片、低色彩图形或 JPEG 反而更大的图片采用无损压缩。
+
+需要逐像素保留图片时，选择 **无损原图**。它使用 PNG 行预测加 Flate 压缩，比直接压缩裸 RGB 像素更省空间。两种模式都清理重复及不再引用的 PDF 对象，文字、公式与矢量绘图不参与 JPEG 压缩。
+
 | 内容 | 处理方式 |
 | --- | --- |
 | 排版、文本、公式与矢量 | PowerPoint 原生导出；后处理核对页面及嵌套 Form 绘图指令与文本不变 |
-| 原始图片 | 在同一页内保守匹配整图，以 Flate 无损压缩写回完整源像素，并逐像素验证 |
+| 原始图片 | 同页保守匹配整图，再按所选模式编码；校验原始尺寸及编码后的像素，报告明确标记是否无损 |
 | 字体 | 记录 PDF 中的字体及其嵌入状态；不自动替换或安装字体 |
-| 尺寸与页数 | 与源 PPTX 校对；不改变页面大小，不自动缩放成 7 inch |
+| 尺寸与页数 | 与源 PPTX 校对，将 PowerPoint 四舍五入后的页面边界校准为源稿的精确尺寸；不缩放绘图内容 |
 | PPTX | 从同一份已保存快照复制，保留原有编辑能力 |
 
 “图片无损”是指被成功匹配和恢复的源像素。恢复范围是幻灯片直接引用的、不透明 RGB 或灰度位图。透明、复杂裁切、滤镜、母版背景、纹理填充、链接图片及 PowerPoint 自动栅格化的效果沿用原生结果，可能无法恢复原始图像或矢量。
 
-匹配存在歧义时不猜测。报告会列出已识别但未恢复的图片；`--strict-images` 会拒绝发布这些文件。此选项只验证已识别的图片对象，不是对 PPTX 全部功能的完整保真证明。字体缺失导致的替换仍需安装原字体后重新导出。
+匹配存在歧义时不猜测。未旋转、未裁切的顶层图片还可通过唯一位置匹配和独立视觉核对恢复。报告会列出已识别但未恢复的图片；`--strict-images` 会拒绝发布这些文件。这一选项在两种图片模式下都验证来源匹配，只有无损模式才保证成功恢复的原始像素完全相同。它不是对 PPTX 全部功能的完整保真证明。字体缺失导致的替换仍需安装原字体后重新导出。
 
 ## 文件保护与校验记录
 
@@ -55,7 +59,7 @@
 
 ```bash
 ./run.command /path/to/Fig_1_7inch.pptx /path/to/Fig_5_7inch.pptx \
-  --output /path/to/figures --copy-pptx --overwrite --strict-images
+  --output /path/to/figures --copy-pptx --overwrite --strict-images --image-mode compact
 ```
 
 输入也可以是文件夹，程序会处理其中的 PPTX，忽略 Office 的 `~$` 临时文件，不递归扫描子目录。不同输入存在同名文件时会拒绝导出。
@@ -66,6 +70,8 @@
 | `--copy-pptx` | 同时复制完全相同的源 PPTX |
 | `--overwrite` | 先备份，再替换已有输出 |
 | `--strict-images` | 已识别位图未全部恢复时停止发布 |
+| `--image-mode compact` | 默认，保留原始分辨率，以 JPEG 95 / 4:4:4 压缩适合的图片 |
+| `--image-mode lossless` | 对成功恢复的图片逐像素无损，文件通常更大 |
 | `--timeout 300` | 每份原生导出的超时秒数，默认 300 |
 | `--version` | 查看版本 |
 
@@ -95,7 +101,7 @@ python3 -m venv .venv
 
 构建脚本生成包含运行环境的 `.app`、命令行入口、源码和依赖许可证。输出目录必须为空。构建架构与所用 Python 一致；最低 macOS 版本取决于 Python 及所有打包动态库，发布前须核对 Mach-O 的 `minos`，不要默认 Homebrew Python 可兼容旧系统。
 
-单元测试使用合成文档，覆盖像素恢复、歧义与裁切拒绝、尺寸不符、并发修改源文件保护、同名输入拒绝和覆盖备份。CI 不包含需要已授权 PowerPoint 的桌面端到端测试；发布前需在 Mac 上实际转换并检查 PDF。
+单元测试使用合成文档，覆盖图片编码、无损像素恢复、冗余对象清理、位置与视觉匹配、精确页面尺寸、并发修改源文件保护、同名输入拒绝和覆盖备份。CI 不包含需要已授权 PowerPoint 的桌面端到端测试；发布前需在 Mac 上实际转换并检查 PDF。
 
 如果导出超时，先检查 PowerPoint 是否有文件访问或修复弹窗，处理后重试。不要在导出过程中修改源稿。
 
